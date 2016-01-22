@@ -95,7 +95,7 @@ public class SimpleRuleGenerator {
             String contentFile = new String(Files.readAllBytes(Paths.get(file.toString())),StandardCharsets.UTF_8);
 
             Integer port = Integer.parseInt(file.toString().split("-")[1]);
-
+            
             DionaeaLogProcessor.getInVertical(hMapLog,port,contentFile);
         }
         
@@ -176,17 +176,38 @@ public class SimpleRuleGenerator {
         for(File file : listFile){
             String contentFile = new String(Files.readAllBytes(Paths.get(file.toString())),StandardCharsets.UTF_8);
 
+            if(contentFile.contains(" \\x0d\\x0aUser-Agent: None\\x0d\\x0a\\x0d\\x0a")){
+                System.out.println(file + " " + contentFile);
+            }
+            
             Integer port = Integer.parseInt(file.toString().split("-")[1]);
 
             DionaeaLogProcessor.getInVertical(hMapLog,port,contentFile);
         }
-        
+             
         //Preprocess log
         Iterator<Integer> keySetIterator = hMapLog.keySet().iterator();
         while(keySetIterator.hasNext()){
             Integer key = keySetIterator.next();
-            if(isHttp(key)){
+            
+            if(RuleGenerator.getSingleton().isHttp(key)){
+                
+                //Print to file
+                Writer writer = null;
+                try {
+                    writer = new BufferedWriter(new OutputStreamWriter(
+                          new FileOutputStream("Unprocessed_log.txt"), "utf-8"));
+                    for(String rule : hMapLog.get(key)){
+                        writer.write(rule+"\n");
+                    }
+                } catch (IOException ex) {
+                  // report
+                } finally {
+                   try {writer.close();} catch (Exception ex) {}
+                }
+                
                 for(int i = 0;i<hMapLog.get(key).size();i++){
+                    
                     String beforeLineBreak = hMapLog.get(key).get(i).substring(0,hMapLog.get(key).get(i).indexOf("\\x0d"));
                     beforeLineBreak = beforeLineBreak.trim();
                     hMapLog.get(key).set(i, beforeLineBreak);
@@ -194,9 +215,25 @@ public class SimpleRuleGenerator {
                 /*for(String log : hMapLog.get(key)){
                     System.out.println(log);
                 }*/
-                hMapLog.get(key).sort(null);
+                
+                writer = null;
+                try {
+                    writer = new BufferedWriter(new OutputStreamWriter(
+                          new FileOutputStream("Processed_log.txt"), "utf-8"));
+                    for(String rule : hMapLog.get(key)){
+                        writer.write(rule+"\n");
+                    }
+                } catch (IOException ex) {
+                  // report
+                } finally {
+                   try {writer.close();} catch (Exception ex) {}
+                }
             }
         }
+        
+        
+
+        
         
         //LCS to reduce rule and add pattern
 //        keySetIterator = hMapLog.keySet().iterator();
@@ -326,18 +363,55 @@ public class SimpleRuleGenerator {
 //          // report
 //        } finally {
 //           try {writer.close();} catch (Exception ex) {}
-//        }
+//        }        
     }
     
-    public static boolean isHttp(int port){
-        return port == 80;
+    public static void createRule() throws IOException{
+        //List all files
+        File folderToScan = new File("net_logs");
+        File[] listFile = folderToScan.listFiles();
+        HashMap<Integer,ArrayList<String>> hMapLog = new HashMap<>();//Hash map of log
+        ArrayList<String> listRule = new ArrayList<>();
+        
+        //Add log to hmap
+        //File file = listFile[1];
+        for(File file : listFile){
+            String contentFile = new String(Files.readAllBytes(Paths.get(file.toString())),StandardCharsets.UTF_8);
+
+            Integer port = Integer.parseInt(file.toString().split("-")[1]);
+            
+            DionaeaLogProcessor.getInVertical(hMapLog,port,contentFile);
+        }
+        
+        Iterator<Integer> keySetIterator = hMapLog.keySet().iterator();
+        while(keySetIterator.hasNext()){
+            Integer port = keySetIterator.next();
+            if(RuleGenerator.getSingleton().isHttp(port)){
+                listRule.addAll(RuleGenerator.getSingleton().createHttpRule(hMapLog.get(port)));
+            }
+        }
+        
+        //Print to file
+        Writer writer = null;
+
+        try {
+            writer = new BufferedWriter(new OutputStreamWriter(
+                  new FileOutputStream("generated_rule_v3.txt"), "utf-8"));
+            for(String rule : listRule){
+                writer.write(rule+"\n");
+            }
+        } catch (IOException ex) {
+          // report
+        } finally {
+           try {writer.close();} catch (Exception ex) {/*ignore*/}
+        }
     }
     
     /**
      * @param args the command line arguments
      */
     public static void main(String[] args) throws FileNotFoundException, IOException {
-        testGronland();
+        createRule();
     }
     
 }
